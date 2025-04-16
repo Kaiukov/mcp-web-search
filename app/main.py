@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-from .rag import call_mistral_api
+import requests  # Add this import
 from bs4 import BeautifulSoup
 from .rag import call_mistral_api
 from .mcp import handle_mcp_request
@@ -12,11 +12,11 @@ def ask(q: str = Query(...)):
     """
     Main endpoint for user queries.
     Depending on the query:
-    - Retrieves relevant links using SearXNG
+    - Retrieves relevant links using DuckDuckGo
     - Scrapes textual content
     - Generates an answer using RAG (Mistral API)
     """
-    links = search_searxng(q)
+    links = search_duckduckgo(q)
     contents = [scrape(url) for url in links[:3]]
     answer = generate_answer(q, contents)
     return {"answer": answer, "sources": links[:3]}
@@ -30,11 +30,21 @@ def mcp_request(request: dict):
     response = handle_mcp_request(request)
     return JSONResponse(content=response)
 
-def search_searxng(query):
-    res = requests.get("http://searxng:8080/search", params={"q": query, "format": "json"})
-    data = res.json()
-    return [r["url"] for r in data.get("results", [])]
-
+def search_duckduckgo(query):
+    try:
+        from duckduckgo_search import DDGS
+        ddgs = DDGS()
+        results = ddgs.text(
+            keywords=query,
+            region='wt-wt',
+            safesearch='moderate',
+            max_results=10
+        )
+        return [r.get("href", "") for r in results]
+        
+    except Exception as e:
+        print(f"DuckDuckGo search error: {e}")
+        return []
 def scrape(url):
     try:
         res = requests.get(url, timeout=5)
@@ -45,6 +55,7 @@ def scrape(url):
         return f"[Scraping Error] {e}"
 
 def generate_answer(question, texts):
-    context = "\n\n".join(texts)
-    prompt = f"Answer the question: {question}\n\nHere is the information found:\n{context}"
+    from .rag import process_documents
+    context = process_documents(texts)
+    prompt = f"Answer based on context: {question}\nContext:\n{context}"
     return call_mistral_api(prompt)
