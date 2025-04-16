@@ -55,7 +55,6 @@ def scrape(url):
         return f"[Scraping Error] {e}"
 
 def generate_answer(question, texts):
-    from .rag import process_documents
-    context = process_documents(texts)
-    prompt = f"Answer based on context: {question}\nContext:\n{context}"
+    context = "\n\n".join(texts)
+    prompt = f"Answer the question: {question}\n\nHere is the information found:\n{context}"
     return call_mistral_api(prompt)
