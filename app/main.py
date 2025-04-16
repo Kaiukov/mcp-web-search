@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
+import os
 import requests  # Add this import
 from bs4 import BeautifulSoup
 from .rag import call_mistral_api
@@ -55,6 +56,13 @@ def scrape(url):
         return f"[Scraping Error] {e}"
 
 def generate_answer(question, texts):
+    from .rag import call_mistral_api
     context = "\n\n".join(texts)
     prompt = f"Answer the question: {question}\n\nHere is the information found:\n{context}"
-    return call_mistral_api(prompt)
+    try:
+        if os.environ.get("MISTRAL_API_KEY"):
+            return call_mistral_api(prompt)
+        else:
+            return "mistral"
+    except Exception as e:
+        return str(e)

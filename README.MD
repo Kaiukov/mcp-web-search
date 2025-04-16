@@ -95,7 +95,7 @@ This project is designed to develop a flexible search solution similar to Perple
 - **Web Framework:** FastAPI
 - **Scraping:** `requests` and `BeautifulSoup` (beautifulsoup4)
 - **LLM (RAG) Calls:** Requests to call the Mistral API via OpenRouter.
-- **Search Engine:** SearXNG (Docker image)
+- **Search Engine:** SearXNG (Docker image), Redis
 - **Containerization:** Docker, docker-compose
 
 ---

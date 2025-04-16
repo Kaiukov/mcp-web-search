@@ -10,23 +10,6 @@ from duckduckgo_search import DDGS
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Update SearXNG URL to use the correct host and port
-SEARXNG_BASE_URL = "http://searxng:8080"
-
-def check_services_health():
-    """Check if SearXNG service is healthy"""
-    services_status = {"searxng": False}
-    
-    # Check SearXNG health
-    try:
-        response = requests.get(SEARXNG_BASE_URL, timeout=5)
-        services_status["searxng"] = response.status_code == 200
-        logger.info(f"SearXNG health check: {'OK' if services_status['searxng'] else 'FAILED'}")
-    except Exception as e:
-        logger.error(f"SearXNG health check failed: {e}")
-    
-    return services_status
-
 def handle_mcp_request(request: dict) -> dict:
     """
     Processes requests in MCP format using DuckDuckGo search.
