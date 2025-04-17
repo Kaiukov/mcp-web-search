@@ -25,15 +25,6 @@ def handle_mcp_request(request: dict) -> dict:
     }
     """
     try:
-        # Check services health before processing
-        services_status = check_services_health()
-        if not services_status["searxng"]:
-            return {
-                "type": "response",
-                "content": "I'm sorry, the search service is currently unavailable. Please try again later.",
-                "sources": []
-            }
-            
         if 'content' not in request:
             raise HTTPException(status_code=400, detail="Missing content in MCP request")
 
@@ -45,13 +36,14 @@ def handle_mcp_request(request: dict) -> dict:
             links = search_duckduckgo(query)
             logger.info(f"Found {len(links)} links")
             
-            contents = [scrape(url) for url in links[:3]] if links else []
+            # Increase to top 5 sources instead of 3
+            contents = [scrape(url) for url in links[:5]] if links else []
             answer = generate_answer(query, contents) if contents else f"I couldn't find relevant information about '{query}'."
             
             response = {
                 "type": "response",
                 "content": answer,
-                "sources": links[:3] if links else []
+                "sources": links[:5] if links else []  # Also update sources to show 5
             }
         except Exception as e:
             logger.error(f"Error in RAG pipeline: {str(e)}")
@@ -85,67 +77,10 @@ def search_duckduckgo(query):
         logger.error(f"DuckDuckGo search error: {e}")
         return []
 
-def search_searxng(query):
-    """Search using SearXNG with improved error handling"""
-    try:
-        logger.info(f"Searching SearXNG for: {query}")
-        # Add timeout and error handling
-        res = requests.get(
-            f"{SEARXNG_BASE_URL}/search", 
-            params={"q": query, "format": "json"},
-            timeout=10,
-            headers={"User-Agent": "RAG-API/1.0"}
-        )
-        
-        logger.info(f"SearXNG response status: {res.status_code}")
-        logger.info(f"SearXNG response headers: {dict(res.headers)}")
-        
-        # Check if response is empty
-        if not res.text.strip():
-            logger.warning("Empty response from SearXNG")
-            return []
-        
-        # Log first part of response for debugging
-        logger.info(f"SearXNG response preview: {res.text[:100]}...")
-        
-        # Try to parse JSON with better error handling
-        try:
-            data = res.json()
-            return [r["url"] for r in data.get("results", [])]
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
-            logger.error(f"Response content: {res.text[:500]}")
-            
-            # Try to check if we're getting HTML instead of JSON
-            if "<html" in res.text.lower():
-                logger.error("SearXNG returned HTML instead of JSON")
-                
-                # Try to extract the error message if it's an HTML error page
-                try:
-                    soup = BeautifulSoup(res.text, "html.parser")
-                    error_msg = soup.title.text if soup.title else "Unknown error"
-                    logger.error(f"HTML error page title: {error_msg}")
-                except Exception:
-                    pass
-            
-            # Try direct connection to SearXNG to check if it's accessible
-            try:
-                logger.info("Attempting direct connection to SearXNG...")
-                health_check = requests.get(SEARXNG_BASE_URL, timeout=5)
-                logger.info(f"SearXNG direct connection status: {health_check.status_code}")
-            except Exception as conn_err:
-                logger.error(f"SearXNG connection error: {conn_err}")
-            
-            return []
-    except requests.RequestException as e:
-        logger.error(f"SearXNG request error: {e}")
-        return []
-    except Exception as e:
-        logger.error(f"Unexpected error in search_searxng: {e}")
-        return []
+# search_searxng function removed
 
 def scrape(url):
-    """Scrape content from URL with error handling"""
+    """Scrape content from URL with improved content extraction"""
     try:
         res = requests.get(
             url, 
@@ -154,10 +89,28 @@ def scrape(url):
         )
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
-        # Limit the amount of text for faster processing
-        return soup.get_text()[:2000]
+        
+        # Try to extract main content by targeting common content containers
+        main_content = ""
+        
+        # Look for article or main content areas first
+        for tag in ['article', 'main', '[role="main"]', '.content', '#content', '.post', '.entry']:
+            content = soup.select(tag)
+            if content:
+                main_content = " ".join([elem.get_text(strip=True) for elem in content])
+                break
+        
+        # If no main content found, use the whole page but remove navigation, headers, footers
+        if not main_content:
+            for tag in ['nav', 'header', 'footer', 'aside', '.sidebar', '#sidebar', '.menu', '.ad', '.advertisement']:
+                for elem in soup.select(tag):
+                    elem.decompose()
+            main_content = soup.get_text(strip=True)
+        
+        # Limit to 1500 chars per source for more focused content
+        return main_content[:1500]
     except Exception as e:
-        print(f"Scraping error for {url}: {e}")
+        logger.error(f"Scraping error for {url}: {e}")
         return f"[Scraping Error] {e}"
 
 def generate_answer(question, texts):
