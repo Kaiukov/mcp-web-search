@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 import asyncio
 import logging
 from duckduckgo_search import DDGS
+import httpx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +85,56 @@ class DuckDuckGoServer:
             except Exception as e:
                 logger.error(f"Error during news search: {e}")
                 raise ValueError(str(e))
+
+        @self.mcp.tool()
+        async def parallel_search_and_scrape(
+            query: str,
+            num_results: int = 3,
+            region: str = "wt-wt",
+            safesearch: str = "moderate"
+        ) -> Dict[str, List]:
+            """Perform a search and scrape content in parallel"""
+            try:
+                # Get search results
+                results = self.ddgs.text(
+                    keywords=query,
+                    region=region,
+                    safesearch=safesearch,
+                    max_results=num_results
+                )
+                
+                urls = [r.get("href", "") for r in results]
+                
+                # Scrape content in parallel
+                contents = await asyncio.gather(*[self._scrape_async(url) for url in urls])
+                
+                return {
+                    "urls": urls,
+                    "contents": contents
+                }
+            except Exception as e:
+                logger.error(f"Error during parallel search and scrape: {e}")
+                raise ValueError(str(e))
+                
+    async def _scrape_async(self, url):
+        """Asynchronous scraper for parallel processing"""
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                response = await client.get(url, headers=headers)
+                
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, "html.parser")
+                
+                # Extract main content (simplified version)
+                for tag in ['nav', 'header', 'footer', 'aside']:
+                    for elem in soup.find_all(tag):
+                        elem.decompose()
+                        
+                return soup.get_text(strip=True)[:1500]
+        except Exception as e:
+            logger.error(f"Scraping error for {url}: {e}")
+            return f"[Scraping Error] {e}"
 
     def run(self):
         """Run the server"""

@@ -1,0 +1,7 @@
+services:
+  rag-api:
+    build:
+      context: .
+      args:
+        - DOCKER_BUILDKIT=1
+    restart: unless-stopped

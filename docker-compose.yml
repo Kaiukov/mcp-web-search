@@ -5,7 +5,5 @@ services:
     build: .
     ports:
       - "8000:8000"
-    environment:
-      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
-
-  # Removed searxng and redis services
+    env_file:
+      - .env

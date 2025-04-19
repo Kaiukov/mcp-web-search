@@ -1,16 +1,18 @@
-FROM python:3.10
+# Use a more specific Python version tag
+FROM python:3.10.12-slim
 
+# Set working directory
 WORKDIR /app
-# Add config directory copy
-COPY ./app ./app
+
+# Copy requirements first for better caching
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Install dependencies including python-dotenv
-RUN pip install uv && \
-    uv pip install --system -r requirements.txt python-dotenv
+# Copy the rest of the application
+COPY . .
 
-# Add Python path configuration
-ENV PYTHONPATH="${PYTHONPATH}:/app/"
+# Expose port
+EXPOSE 8000
 
-# Change to uvicorn instead of uv run
+# Command to run the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

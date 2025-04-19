@@ -4,3 +4,4 @@ beautifulsoup4
 mistralai
 aiohttp
 requests
+httpx
